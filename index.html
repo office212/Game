@@ -2,239 +2,195 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>THE MONSTER ENGINE</title>
+<title>Mini Mario Classic</title>
 <style>
-body{margin:0;overflow:hidden;background:black;}
-canvas{display:block;margin:auto;}
+body { margin:0; overflow:hidden; background:#5c94fc; }
+canvas { display:block; margin:auto; background:#5c94fc; }
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="game"></canvas>
 <script>
 
-const canvas=document.getElementById("c");
-const ctx=canvas.getContext("2d");
-canvas.width=1800;
-canvas.height=900;
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-let hue=0;
-let shake=0;
-let distortion=0;
-let slow=1;
-let meltdown=false;
+canvas.width = 900;
+canvas.height = 500;
 
-let keys={};
-document.addEventListener("keydown",e=>keys[e.code]=true);
-document.addEventListener("keyup",e=>keys[e.code]=false);
+let gravity = 0.8;
+let cameraX = 0;
+let lives = 3;
+let gameOver = false;
 
-let player={
-x:400,y:400,w:40,h:40,
-dx:0,dy:0,
-hp:500
+let keys = {};
+document.addEventListener("keydown", e => keys[e.code] = true);
+document.addEventListener("keyup", e => keys[e.code] = false);
+
+let player = {
+  x:100,
+  y:300,
+  w:40,
+  h:50,
+  dx:0,
+  dy:0,
+  speed:5,
+  jump:15,
+  grounded:false
 };
 
-let enemies=[];
-let bullets=[];
-let particles=[];
-let portals=[];
-let blackHole={x:900,y:450,r:200};
+let worldWidth = 3000;
 
-for(let i=0;i<5;i++){
-portals.push({
-x:Math.random()*5000,
-y:Math.random()*800
-});
-}
+let platforms = [
+  {x:0,y:450,w:3000,h:50},
+  {x:400,y:350,w:150,h:20},
+  {x:700,y:300,w:150,h:20},
+  {x:1100,y:350,w:200,h:20},
+  {x:1600,y:300,w:150,h:20}
+];
 
-function spawnEnemy(){
-let type=Math.floor(Math.random()*3);
-enemies.push({
-x:Math.random()*6000,
-y:Math.random()*800,
-dx:(Math.random()-0.5)*8,
-dy:(Math.random()-0.5)*8,
-hp:5,
-type:type
-});
-}
+let coins = [
+  {x:430,y:310,collected:false},
+  {x:750,y:260,collected:false},
+  {x:1150,y:310,collected:false}
+];
 
-setInterval(spawnEnemy,100);
+let enemies = [
+  {x:600,y:410,w:40,h:40,dir:1,alive:true},
+  {x:1400,y:410,w:40,h:40,dir:-1,alive:true}
+];
 
-function explode(x,y){
-for(let i=0;i<300;i++){
-particles.push({
-x,y,
-dx:(Math.random()-0.5)*40,
-dy:(Math.random()-0.5)*40,
-life:100
-});
-}
-shake=60;
-distortion=25;
+let flag = {x:2800,y:350,w:20,h:100};
+
+function resetPlayer(){
+  player.x = 100;
+  player.y = 300;
+  player.dx = 0;
+  player.dy = 0;
 }
 
 function update(){
 
-slow=enemies.length>300?0.3:1;
+if(gameOver) return;
 
-if(keys["ArrowRight"]) player.dx=12;
-else if(keys["ArrowLeft"]) player.dx=-12;
-else player.dx*=0.9;
+player.dx = 0;
 
-if(keys["Space"]) player.dy=-20;
+if(keys["ArrowRight"]) player.dx = player.speed;
+if(keys["ArrowLeft"]) player.dx = -player.speed;
 
-player.dy+=1;
-player.x+=player.dx*slow;
-player.y+=player.dy*slow;
-
-if(player.y>canvas.height){
-player.y=200;
-player.hp-=30;
+if(keys["Space"] && player.grounded){
+  player.dy = -player.jump;
+  player.grounded = false;
 }
 
-blackHole.x+=(player.x-blackHole.x)*0.01;
-blackHole.y+=(player.y-blackHole.y)*0.01;
+player.dy += gravity;
+player.x += player.dx;
+player.y += player.dy;
 
-for(let p of portals){
-if(Math.abs(player.x-p.x)<50 &&
-Math.abs(player.y-p.y)<50){
-let target=portals[Math.floor(Math.random()*portals.length)];
-player.x=target.x;
-player.y=target.y;
-shake=40;
+player.grounded = false;
+
+for(let p of platforms){
+  if(player.x < p.x+p.w &&
+     player.x+player.w > p.x &&
+     player.y < p.y+p.h &&
+     player.y+player.h > p.y &&
+     player.dy > 0){
+       player.y = p.y-player.h;
+       player.dy = 0;
+       player.grounded = true;
+  }
 }
+
+if(player.y > canvas.height){
+  lives--;
+  resetPlayer();
+  if(lives<=0) gameOver = true;
 }
 
 for(let e of enemies){
+  if(!e.alive) continue;
 
-let dx=blackHole.x-e.x;
-let dy=blackHole.y-e.y;
-let d=Math.sqrt(dx*dx+dy*dy);
+  e.x += e.dir * 2;
+  if(Math.random()<0.01) e.dir *= -1;
 
-if(d<blackHole.r*3){
-e.dx+=dx/d*1.2;
-e.dy+=dy/d*1.2;
+  if(player.x < e.x+e.w &&
+     player.x+player.w > e.x &&
+     player.y < e.y+e.h &&
+     player.y+player.h > e.y){
+
+     if(player.dy > 0){
+       e.alive = false;
+       player.dy = -10;
+     } else {
+       lives--;
+       resetPlayer();
+     }
+  }
 }
 
-if(e.type===1){
-e.dx+=(player.x-e.x)*0.0005;
-e.dy+=(player.y-e.y)*0.0005;
+for(let c of coins){
+  if(!c.collected &&
+     player.x < c.x+20 &&
+     player.x+player.w > c.x &&
+     player.y < c.y+20 &&
+     player.y+player.h > c.y){
+       c.collected = true;
+  }
 }
 
-if(e.type===2 && Math.random()<0.02){
-bullets.push({
-x:e.x,
-y:e.y,
-dx:(player.x-e.x)/20,
-dy:(player.y-e.y)/20
-});
-}
+if(player.x < 0) player.x = 0;
+if(player.x > worldWidth-player.w)
+  player.x = worldWidth-player.w;
 
-e.x+=e.dx*slow;
-e.y+=e.dy*slow;
+cameraX = player.x - 200;
+if(cameraX < 0) cameraX = 0;
 
-if(d<blackHole.r){
-explode(e.x,e.y);
-e.hp=0;
+if(player.x > flag.x){
+  alert("YOU WIN!");
+  location.reload();
 }
-
-if(Math.abs(player.x-e.x)<40 &&
-Math.abs(player.y-e.y)<40){
-player.hp-=1;
-shake=15;
-}
-}
-
-enemies=enemies.filter(e=>e.hp>0);
-
-for(let b of bullets){
-b.x+=b.dx;
-b.y+=b.dy;
-if(Math.abs(player.x-b.x)<20 &&
-Math.abs(player.y-b.y)<20){
-player.hp-=2;
-shake=20;
-}
-}
-
-for(let p of particles){
-p.x+=p.dx*slow;
-p.y+=p.dy*slow;
-p.life--;
-}
-particles=particles.filter(p=>p.life>0);
-
-if(player.hp<=0){
-meltdown=true;
-}
-
-hue+=4;
-if(distortion>0) distortion--;
 
 }
 
 function draw(){
 
-ctx.save();
-
-if(shake>0){
-ctx.translate(Math.random()*shake-shake/2,
-Math.random()*shake-shake/2);
-shake--;
-}
-
 ctx.clearRect(0,0,canvas.width,canvas.height);
 
-ctx.fillStyle="hsl("+hue+",100%,5%)";
-ctx.fillRect(0,0,canvas.width,canvas.height);
+ctx.save();
+ctx.translate(-cameraX,0);
 
-ctx.fillStyle="hsl("+hue+",100%,50%)";
-ctx.fillRect(player.x,player.y,player.w,player.h);
-
-ctx.beginPath();
-ctx.arc(blackHole.x,blackHole.y,blackHole.r,0,Math.PI*2);
-ctx.fillStyle="black";
-ctx.fill();
-ctx.strokeStyle="hsl("+hue+",100%,50%)";
-ctx.stroke();
-
-ctx.fillStyle="orange";
-for(let p of portals){
-ctx.beginPath();
-ctx.arc(p.x,p.y,30,0,Math.PI*2);
-ctx.fill();
+ctx.fillStyle="#654321";
+for(let p of platforms){
+  ctx.fillRect(p.x,p.y,p.w,p.h);
 }
+
+ctx.fillStyle="gold";
+for(let c of coins){
+  if(!c.collected)
+    ctx.fillRect(c.x,c.y,20,20);
+}
+
+ctx.fillStyle="brown";
+for(let e of enemies){
+  if(e.alive)
+    ctx.fillRect(e.x,e.y,e.w,e.h);
+}
+
+ctx.fillStyle="green";
+ctx.fillRect(flag.x,flag.y,flag.w,flag.h);
 
 ctx.fillStyle="red";
-for(let e of enemies){
-ctx.fillRect(e.x,e.y,30,30);
-}
-
-ctx.fillStyle="cyan";
-for(let b of bullets){
-ctx.fillRect(b.x,b.y,8,8);
-}
-
-for(let p of particles){
-ctx.fillStyle="hsl("+hue+",100%,60%)";
-ctx.fillRect(p.x,p.y,5,5);
-}
-
-if(meltdown){
-for(let i=0;i<100;i++){
-ctx.fillStyle="rgba(255,0,0,0.05)";
-ctx.fillRect(Math.random()*canvas.width,
-Math.random()*canvas.height,
-30,30);
-}
-ctx.filter="blur("+distortion+"px)";
-}
+ctx.fillRect(player.x,player.y,player.w,player.h);
 
 ctx.restore();
 
 ctx.fillStyle="white";
-ctx.fillText("HP: "+player.hp,20,30);
-ctx.fillText("Enemies: "+enemies.length,20,60);
+ctx.fillText("Lives: "+lives,20,30);
+
+if(gameOver){
+  ctx.font="60px Arial";
+  ctx.fillText("GAME OVER",300,250);
+}
 
 }
 
