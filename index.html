@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Mini Mario Classic</title>
+<title>Mini Mario Real</title>
 <style>
 body { margin:0; overflow:hidden; background:#5c94fc; }
 canvas { display:block; margin:auto; background:#5c94fc; }
@@ -12,192 +12,216 @@ canvas { display:block; margin:auto; background:#5c94fc; }
 <canvas id="game"></canvas>
 <script>
 
+// Canvas
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-
 canvas.width = 900;
 canvas.height = 500;
 
-let gravity = 0.8;
+// Physics
+const gravity = 0.8;
+
+// Player
+let player = {x:100, y:300, w:40, h:50, dx:0, dy:0, speed:5, jump:15, grounded:false, big:false};
+
+// Camera
 let cameraX = 0;
+
+// Game state
 let lives = 3;
+let coinsCollected = 0;
 let gameOver = false;
 
+// Input
 let keys = {};
 document.addEventListener("keydown", e => keys[e.code] = true);
 document.addEventListener("keyup", e => keys[e.code] = false);
 
-let player = {
-  x:100,
-  y:300,
-  w:40,
-  h:50,
-  dx:0,
-  dy:0,
-  speed:5,
-  jump:15,
-  grounded:false
-};
-
+// World
 let worldWidth = 3000;
 
+// Platforms
 let platforms = [
-  {x:0,y:450,w:3000,h:50},
-  {x:400,y:350,w:150,h:20},
-  {x:700,y:300,w:150,h:20},
-  {x:1100,y:350,w:200,h:20},
-  {x:1600,y:300,w:150,h:20}
+  {x:0, y:450, w:3000, h:50},
+  {x:400, y:350, w:150, h:20},
+  {x:700, y:300, w:150, h:20},
+  {x:1100, y:350, w:200, h:20},
+  {x:1600, y:300, w:150, h:20}
 ];
 
+// Coins
 let coins = [
-  {x:430,y:310,collected:false},
-  {x:750,y:260,collected:false},
-  {x:1150,y:310,collected:false}
+  {x:430, y:310, collected:false},
+  {x:750, y:260, collected:false},
+  {x:1150, y:310, collected:false}
 ];
 
+// Mushrooms (power-ups)
+let mushrooms = [
+  {x:500, y:310, collected:false}
+];
+
+// Enemies
 let enemies = [
-  {x:600,y:410,w:40,h:40,dir:1,alive:true},
-  {x:1400,y:410,w:40,h:40,dir:-1,alive:true}
+  {x:600, y:410, w:40, h:40, dir:1, alive:true},
+  {x:1400, y:410, w:40, h:40, dir:-1, alive:true}
 ];
 
-let flag = {x:2800,y:350,w:20,h:100};
+// Flag
+let flag = {x:2800, y:350, w:20, h:100};
 
+// Reset player
 function resetPlayer(){
   player.x = 100;
   player.y = 300;
   player.dx = 0;
   player.dy = 0;
+  player.big = false;
 }
 
+// Update loop
 function update(){
+  if(gameOver) return;
 
-if(gameOver) return;
+  // Movement
+  player.dx = 0;
+  if(keys["ArrowRight"]) player.dx = player.speed;
+  if(keys["ArrowLeft"]) player.dx = -player.speed;
+  if(keys["Space"] && player.grounded){
+    player.dy = -player.jump;
+    player.grounded = false;
+  }
 
-player.dx = 0;
-
-if(keys["ArrowRight"]) player.dx = player.speed;
-if(keys["ArrowLeft"]) player.dx = -player.speed;
-
-if(keys["Space"] && player.grounded){
-  player.dy = -player.jump;
+  // Physics
+  player.dy += gravity;
+  player.x += player.dx;
+  player.y += player.dy;
   player.grounded = false;
-}
 
-player.dy += gravity;
-player.x += player.dx;
-player.y += player.dy;
+  // Platform collision
+  for(let p of platforms){
+    if(player.x < p.x+p.w && player.x+player.w > p.x &&
+       player.y < p.y+p.h && player.y+player.h > p.y &&
+       player.dy > 0){
+      player.y = p.y - player.h;
+      player.dy = 0;
+      player.grounded = true;
+    }
+  }
 
-player.grounded = false;
+  // Out of screen
+  if(player.y > canvas.height){
+    lives--;
+    resetPlayer();
+    if(lives<=0) gameOver = true;
+  }
 
-for(let p of platforms){
-  if(player.x < p.x+p.w &&
-     player.x+player.w > p.x &&
-     player.y < p.y+p.h &&
-     player.y+player.h > p.y &&
-     player.dy > 0){
-       player.y = p.y-player.h;
-       player.dy = 0;
-       player.grounded = true;
+  // Coins
+  for(let c of coins){
+    if(!c.collected && player.x < c.x+20 && player.x+player.w > c.x &&
+       player.y < c.y+20 && player.y+player.h > c.y){
+      c.collected = true;
+      coinsCollected++;
+    }
+  }
+
+  // Mushrooms
+  for(let m of mushrooms){
+    if(!m.collected && player.x < m.x+20 && player.x+player.w > m.x &&
+       player.y < m.y+20 && player.y+player.h > m.y){
+      m.collected = true;
+      player.big = true;
+      player.h = 70;
+    }
+  }
+
+  // Enemies
+  for(let e of enemies){
+    if(!e.alive) continue;
+    e.x += e.dir*2;
+    if(Math.random()<0.01) e.dir *= -1;
+
+    // Collision with player
+    if(player.x < e.x+e.w && player.x+player.w > e.x &&
+       player.y < e.y+e.h && player.y+player.h > e.y){
+      if(player.dy > 0){
+        e.alive = false;
+        player.dy = -10;
+      } else {
+        lives--;
+        resetPlayer();
+      }
+    }
+  }
+
+  // Bounds
+  if(player.x < 0) player.x = 0;
+  if(player.x > worldWidth-player.w) player.x = worldWidth-player.w;
+
+  // Camera
+  cameraX = player.x - 200;
+  if(cameraX < 0) cameraX = 0;
+
+  // Flag
+  if(player.x > flag.x){
+    alert("YOU WIN! Coins: "+coinsCollected);
+    location.reload();
   }
 }
 
-if(player.y > canvas.height){
-  lives--;
-  resetPlayer();
-  if(lives<=0) gameOver = true;
-}
-
-for(let e of enemies){
-  if(!e.alive) continue;
-
-  e.x += e.dir * 2;
-  if(Math.random()<0.01) e.dir *= -1;
-
-  if(player.x < e.x+e.w &&
-     player.x+player.w > e.x &&
-     player.y < e.y+e.h &&
-     player.y+player.h > e.y){
-
-     if(player.dy > 0){
-       e.alive = false;
-       player.dy = -10;
-     } else {
-       lives--;
-       resetPlayer();
-     }
-  }
-}
-
-for(let c of coins){
-  if(!c.collected &&
-     player.x < c.x+20 &&
-     player.x+player.w > c.x &&
-     player.y < c.y+20 &&
-     player.y+player.h > c.y){
-       c.collected = true;
-  }
-}
-
-if(player.x < 0) player.x = 0;
-if(player.x > worldWidth-player.w)
-  player.x = worldWidth-player.w;
-
-cameraX = player.x - 200;
-if(cameraX < 0) cameraX = 0;
-
-if(player.x > flag.x){
-  alert("YOU WIN!");
-  location.reload();
-}
-
-}
-
+// Draw loop
 function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(-cameraX,0);
 
-ctx.clearRect(0,0,canvas.width,canvas.height);
+  // Background
+  ctx.fillStyle="#5c94fc";
+  ctx.fillRect(cameraX,0,canvas.width,canvas.height);
 
-ctx.save();
-ctx.translate(-cameraX,0);
+  // Platforms
+  ctx.fillStyle="#654321";
+  for(let p of platforms) ctx.fillRect(p.x,p.y,p.w,p.h);
 
-ctx.fillStyle="#654321";
-for(let p of platforms){
-  ctx.fillRect(p.x,p.y,p.w,p.h);
+  // Coins
+  ctx.fillStyle="gold";
+  for(let c of coins) if(!c.collected) ctx.fillRect(c.x,c.y,20,20);
+
+  // Mushrooms
+  ctx.fillStyle="red";
+  for(let m of mushrooms) if(!m.collected) ctx.fillRect(m.x,m.y,20,20);
+
+  // Enemies
+  ctx.fillStyle="green";
+  for(let e of enemies) if(e.alive) ctx.fillRect(e.x,e.y,e.w,e.h);
+
+  // Flag
+  ctx.fillStyle="blue";
+  ctx.fillRect(flag.x,flag.y,flag.w,flag.h);
+
+  // Player
+  ctx.fillStyle="red";
+  ctx.fillRect(player.x,player.y,player.w,player.h);
+
+  ctx.restore();
+
+  // HUD
+  ctx.fillStyle="white";
+  ctx.font="20px Arial";
+  ctx.fillText("Lives: "+lives,20,30);
+  ctx.fillText("Coins: "+coinsCollected,20,60);
+
+  if(gameOver){
+    ctx.font="60px Arial";
+    ctx.fillText("GAME OVER",300,250);
+  }
 }
 
-ctx.fillStyle="gold";
-for(let c of coins){
-  if(!c.collected)
-    ctx.fillRect(c.x,c.y,20,20);
-}
-
-ctx.fillStyle="brown";
-for(let e of enemies){
-  if(e.alive)
-    ctx.fillRect(e.x,e.y,e.w,e.h);
-}
-
-ctx.fillStyle="green";
-ctx.fillRect(flag.x,flag.y,flag.w,flag.h);
-
-ctx.fillStyle="red";
-ctx.fillRect(player.x,player.y,player.w,player.h);
-
-ctx.restore();
-
-ctx.fillStyle="white";
-ctx.fillText("Lives: "+lives,20,30);
-
-if(gameOver){
-  ctx.font="60px Arial";
-  ctx.fillText("GAME OVER",300,250);
-}
-
-}
-
+// Game loop
 function loop(){
-update();
-draw();
-requestAnimationFrame(loop);
+  update();
+  draw();
+  requestAnimationFrame(loop);
 }
 
 loop();
